@@ -334,6 +334,24 @@
             text-transform: uppercase;
             letter-spacing: 0.05em;
             border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+            cursor: pointer;
+            user-select: none;
+            transition: background 0.2s ease, color 0.2s ease;
+        }
+
+        th:hover {
+            background: rgba(255, 255, 255, 0.05);
+            color: var(--text-primary);
+        }
+
+        th.sorted-asc::after {
+            content: ' ▲';
+            color: var(--primary-green);
+        }
+
+        th.sorted-desc::after {
+            content: ' ▼';
+            color: var(--primary-green);
         }
 
         td {
@@ -426,6 +444,32 @@
             color: var(--text-secondary);
             margin-top: 0.5rem;
         }
+
+        /* Sorting Dropdown Control */
+        .sort-control-container {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            background: rgba(255, 255, 255, 0.03);
+            border: 1px solid rgba(255, 255, 255, 0.05);
+            padding: 0.35rem 0.75rem;
+            border-radius: 8px;
+            font-size: 0.8rem;
+        }
+
+        .sort-select {
+            background: transparent;
+            border: none;
+            color: var(--text-primary);
+            font-weight: 600;
+            outline: none;
+            cursor: pointer;
+        }
+
+        .sort-select option {
+            background: #121826;
+            color: var(--text-primary);
+        }
     </style>
 </head>
 <body>
@@ -436,6 +480,7 @@
             <h1>SmartMoney Scanner</h1>
             <p>NSE Stock Futures & Sectoral Buildup Real-time Tracker</p>
             <div id="status-toast" class="toast">Initializing...</div>
+            <div id="timer-toast" class="toast" style="color: var(--primary-green); font-weight: 600; margin-left: 10px;"></div>
         </header>
 
         <!-- Spinner Section -->
@@ -470,20 +515,32 @@
 
             <!-- STOCKS IN ACTIVE SECTOR CARD -->
             <div class="card">
-                <div class="card-header" style="flex-wrap: wrap; gap: 0.5rem;">
+                <div class="card-header" style="flex-wrap: wrap; gap: 0.75rem;">
                     <div class="card-title" id="stocks-title">📈 Stock Analysis</div>
-                    <div id="sector-breadth-badge" class="buildup-badge long-buildup">Breadth: Strong</div>
+                    <div style="display: flex; gap: 0.5rem; align-items: center; margin-left: auto;">
+                        <!-- Custom Score Sorter -->
+                        <div class="sort-control-container">
+                            <span>Sort By:</span>
+                            <select id="sector-sort-select" class="sort-select" onchange="applyCustomSort('sector')">
+                                <option value="default">Default Buildup</option>
+                                <option value="price_change">Price Change %</option>
+                                <option value="oi_change">OI Change %</option>
+                                <option value="momentum">Momentum (Price × OI)</option>
+                            </select>
+                        </div>
+                        <div id="sector-breadth-badge" class="buildup-badge long-buildup">Breadth: Strong</div>
+                    </div>
                 </div>
                 <div class="table-container">
                     <table>
                         <thead>
-                            <tr>
-                                <th>Symbol</th>
-                                <th style="text-align: right;">LTP (Rs.)</th>
-                                <th style="text-align: right;">Price Chg %</th>
-                                <th style="text-align: right;">OI Chg %</th>
-                                <th style="text-align: right; font-weight: 400; color: var(--text-secondary);">Value</th>
-                                <th style="text-align: center;">Buildup Type</th>
+                            <tr id="sector-th-row">
+                                <th onclick="sortColumn('sector', 'symbol')" id="sector-th-symbol">Symbol</th>
+                                <th style="text-align: right;" onclick="sortColumn('sector', 'price')" id="sector-th-price">LTP (Rs.)</th>
+                                <th style="text-align: right;" onclick="sortColumn('sector', 'price_change')" id="sector-th-price_change">Price Chg %</th>
+                                <th style="text-align: right;" onclick="sortColumn('sector', 'oi_change')" id="sector-th-oi_change">OI Chg %</th>
+                                <th style="text-align: right; color: var(--text-secondary);" onclick="sortColumn('sector', 'value_crores')" id="sector-th-value_crores">Value</th>
+                                <th style="text-align: center;" onclick="sortColumn('sector', 'buildup')" id="sector-th-buildup">Buildup Type</th>
                             </tr>
                         </thead>
                         <tbody id="stocks-table-body">
@@ -493,22 +550,33 @@
                 </div>
             </div>
 
-            <!-- GLOBAL MOST ACTIVE STOCK FUTURES (USER REQUESTED) -->
+            <!-- GLOBAL MOST ACTIVE STOCK FUTURES -->
             <div class="card full-width-card" style="border: 1px solid rgba(59, 130, 246, 0.15);">
-                <div class="card-header" style="flex-wrap: wrap; gap: 0.5rem;">
+                <div class="card-header" style="flex-wrap: wrap; gap: 0.75rem;">
                     <div class="card-title">🔥 Global Most Active Stock Futures (NSE Market Watch)</div>
-                    <span style="color: var(--primary-blue); font-size: 0.75rem; font-weight: 700; text-transform: uppercase; border: 1px solid rgba(59, 130, 246, 0.2); padding: 0.2rem 0.5rem; border-radius: 4px;">Ranked by Value in Crores</span>
+                    <div style="display: flex; gap: 0.5rem; align-items: center; margin-left: auto;">
+                        <div class="sort-control-container">
+                            <span>Sort By:</span>
+                            <select id="active-sort-select" class="sort-select" onchange="applyCustomSort('active')">
+                                <option value="value_crores">Traded Value (Default)</option>
+                                <option value="price_change">Price Change %</option>
+                                <option value="oi_change">OI Change %</option>
+                                <option value="momentum">Momentum (Price × OI)</option>
+                            </select>
+                        </div>
+                        <span style="color: var(--primary-blue); font-size: 0.75rem; font-weight: 700; text-transform: uppercase; border: 1px solid rgba(59, 130, 246, 0.2); padding: 0.2rem 0.5rem; border-radius: 4px;">F&O Market Segment</span>
+                    </div>
                 </div>
                 <div class="table-container">
                     <table>
                         <thead>
-                            <tr>
-                                <th>Symbol</th>
-                                <th style="text-align: right;">LTP (Rs.)</th>
-                                <th style="text-align: right;">Price Chg %</th>
-                                <th style="text-align: right;">OI Chg %</th>
-                                <th style="text-align: right; color: var(--primary-gold); font-weight: 700;">Value (Crores)</th>
-                                <th style="text-align: center;">Buildup Type</th>
+                            <tr id="active-th-row">
+                                <th onclick="sortColumn('active', 'symbol')" id="active-th-symbol">Symbol</th>
+                                <th style="text-align: right;" onclick="sortColumn('active', 'price')" id="active-th-price">LTP (Rs.)</th>
+                                <th style="text-align: right;" onclick="sortColumn('active', 'price_change')" id="active-th-price_change">Price Chg %</th>
+                                <th style="text-align: right;" onclick="sortColumn('active', 'oi_change')" id="active-th-oi_change">OI Chg %</th>
+                                <th style="text-align: right; color: var(--primary-gold); font-weight: 700;" onclick="sortColumn('active', 'value_crores')" id="active-th-value_crores">Value (Crores)</th>
+                                <th style="text-align: center;" onclick="sortColumn('active', 'buildup')" id="active-th-buildup">Buildup Type</th>
                             </tr>
                         </thead>
                         <tbody id="active-table-body">
@@ -526,21 +594,35 @@
     </div>
 
     <script>
+        // Global variables to store parsed dashboard state
+        let dashboardData = null;
+        let currentSort = {
+            sector: { key: 'default', asc: false },
+            active: { key: 'value_crores', asc: false }
+        };
+        let countdownValue = 180; // 3 minutes in seconds
+        let countdownInterval = null;
+
         // Fetch and load data
         async function loadDashboardData() {
+            // Stop any running countdown
+            if (countdownInterval) clearInterval(countdownInterval);
+
             // Show loader
             document.getElementById('loader').style.display = 'flex';
             document.getElementById('dashboard').classList.remove('loaded');
             document.getElementById('status-toast').innerText = "Connecting to API...";
+            document.getElementById('timer-toast').innerText = "";
             
             try {
-                // Call Vercel Python Serverless API endpoint
                 const response = await fetch('/api');
                 const data = await response.json();
                 
                 if (data.success) {
-                    renderDashboard(data);
+                    dashboardData = data;
+                    renderDashboard();
                     document.getElementById('status-toast').innerText = `Last updated: ${data.timestamp}`;
+                    startCountdown(); // Start auto-refresh timer
                 } else {
                     showError(data.error || "Failed to process market data");
                 }
@@ -552,13 +634,125 @@
             }
         }
 
-        function renderDashboard(data) {
-            // Render Recommendations
+        // Auto Refresh Countdown Timer
+        function startCountdown() {
+            countdownValue = 180; // Reset to 3 minutes
+            updateTimerText();
+
+            countdownInterval = setInterval(() => {
+                countdownValue--;
+                updateTimerText();
+
+                if (countdownValue <= 0) {
+                    clearInterval(countdownInterval);
+                    loadDashboardData(); // Refresh data
+                }
+            }, 1000);
+        }
+
+        function updateTimerText() {
+            const minutes = Math.floor(countdownValue / 60);
+            const seconds = countdownValue % 60;
+            const formattedSec = seconds < 10 ? `0${seconds}` : seconds;
+            document.getElementById('timer-toast').innerText = `🔄 Auto-refreshing in ${minutes}:${formattedSec}`;
+        }
+
+        // Apply Custom Sort Dropdown selection
+        function applyCustomSort(tableId) {
+            const select = document.getElementById(`${tableId}-sort-select`);
+            const val = select.value;
+            currentSort[tableId].key = val;
+            currentSort[tableId].asc = false; // Sort descending by default for selections
+            
+            // Clear standard table header sorting classes
+            const headers = document.querySelectorAll(`#${tableId}-th-row th`);
+            headers.forEach(h => h.className = '');
+
+            // Re-render
+            if (tableId === 'sector') renderSectoralTable();
+            else renderActiveTable();
+        }
+
+        // Column Click Sorter
+        function sortColumn(tableId, columnKey) {
+            // Toggle order if clicking same column
+            if (currentSort[tableId].key === columnKey) {
+                currentSort[tableId].asc = !currentSort[tableId].asc;
+            } else {
+                currentSort[tableId].key = columnKey;
+                currentSort[tableId].asc = columnKey === 'symbol' ? true : false; // symbol ascending, numbers descending
+            }
+
+            // Sync sort-select dropdown UI
+            const select = document.getElementById(`${tableId}-sort-select`);
+            if (['price_change', 'oi_change', 'value_crores'].includes(columnKey)) {
+                select.value = columnKey;
+            } else {
+                select.value = 'default'; // switch to default if custom clicked
+            }
+
+            // Render sorting icons
+            const headers = document.querySelectorAll(`#${tableId}-th-row th`);
+            headers.forEach(h => h.className = '');
+            
+            const activeHeader = document.getElementById(`${tableId}-th-${columnKey}`);
+            if (activeHeader) {
+                activeHeader.className = currentSort[tableId].asc ? 'sorted-asc' : 'sorted-desc';
+            }
+
+            if (tableId === 'sector') renderSectoralTable();
+            else renderActiveTable();
+        }
+
+        // Sorting Logic Implementation
+        function getSortedData(dataList, sortSettings) {
+            if (!dataList || dataList.length === 0) return [];
+            
+            const listCopy = [...dataList];
+            const { key, asc } = sortSettings;
+
+            return listCopy.sort((a, b) => {
+                let valA, valB;
+
+                if (key === 'default') {
+                    // Default ranks buildup priority
+                    const ranks = { 'Long Buildup': 1, 'Short Covering': 2, 'Neutral': 3, 'Long Unwinding': 4, 'Short Buildup': 5 };
+                    valA = ranks[a.buildup] || 9;
+                    valB = ranks[b.buildup] || 9;
+                    // Sort by rank ascending (Long Buildup first)
+                    if (valA !== valB) return valA - valB;
+                    // Then by OI change descending
+                    return (b.oi_change || 0) - (a.oi_change || 0);
+                } else if (key === 'momentum') {
+                    // Momentum Score = Price Change × OI Change (positive momentum only)
+                    valA = (a.price_change || 0) * (a.oi_change || 0);
+                    valB = (b.price_change || 0) * (b.oi_change || 0);
+                } else {
+                    valA = a[key];
+                    valB = b[key];
+                }
+
+                // Handle missing or null values
+                if (valA === null || valA === undefined) return 1;
+                if (valB === null || valB === undefined) return -1;
+
+                if (typeof valA === 'string') {
+                    return asc ? valA.localeCompare(valB) : valB.localeCompare(valA);
+                } else {
+                    return asc ? valA - valB : valB - valA;
+                }
+            });
+        }
+
+        function renderDashboard() {
+            if (!dashboardData) return;
+
+            // 1. Render Recommendations
             const recContainer = document.getElementById('recommendations-container');
             recContainer.innerHTML = '';
             
-            if (data.recommendations && data.recommendations.length > 0) {
-                data.recommendations.forEach(rec => {
+            if (dashboardData.recommendations && dashboardData.recommendations.length > 0) {
+                dashboardData.recommendations.forEach(rec => {
                     const isLong = rec.buildup === "Long Buildup";
                     const isShort = rec.buildup === "Short Buildup";
                     const tagClass = isLong ? 'long' : isShort ? 'short' : 'long';
@@ -592,14 +786,14 @@
                 recContainer.innerHTML = '<div style="color: var(--text-secondary); width: 100%; text-align: center; padding: 1rem;">No trade opportunities found today.</div>';
             }
 
-            // Render Sector List
+            // 2. Render Sector List
             const sectorList = document.getElementById('sector-list');
             sectorList.innerHTML = '';
             
-            data.sectors.forEach((sec, idx) => {
+            dashboardData.sectors.forEach((sec, idx) => {
                 const color = sec.change >= 0 ? 'var(--primary-green)' : 'var(--primary-red)';
                 const changeClass = sec.change >= 0 ? 'green-text' : 'red-text';
-                const progressWidth = Math.min(Math.max((sec.change + 3) * 15, 5), 100); // normalized display
+                const progressWidth = Math.min(Math.max((sec.change + 3) * 15, 5), 100);
                 
                 sectorList.innerHTML += `
                     <div class="sector-item">
@@ -618,23 +812,35 @@
                 `;
             });
 
-            // Update Stock Table header
-            document.getElementById('stocks-title').innerText = `📈 Stock Analysis: ${data.top_sector}`;
+            // 3. Render Sectoral Stock Table & Header
+            document.getElementById('stocks-title').innerText = `📈 Stock Analysis: ${dashboardData.top_sector}`;
             const breadthBadge = document.getElementById('sector-breadth-badge');
-            breadthBadge.innerText = `Breadth: ${data.sector_breadth.toFixed(1)}%`;
-            if (data.sector_breadth >= 70.0) {
+            breadthBadge.innerText = `Breadth: ${dashboardData.sector_breadth.toFixed(1)}%`;
+            if (dashboardData.sector_breadth >= 70.0) {
                 breadthBadge.className = "buildup-badge long-buildup";
                 breadthBadge.innerText += " (Strong)";
             } else {
                 breadthBadge.className = "buildup-badge long-unwinding";
                 breadthBadge.innerText += " (Weak)";
             }
+            renderSectoralTable();
 
-            // Render Sectoral Stock Table
+            // 4. Render Global Active Table
+            renderActiveTable();
+
+            // Display grid
+            document.getElementById('dashboard').classList.add('loaded');
+        }
+
+        // Render Sectoral Table based on current sort settings
+        function renderSectoralTable() {
+            if (!dashboardData) return;
             const tbody = document.getElementById('stocks-table-body');
             tbody.innerHTML = '';
             
-            data.stocks.forEach(stock => {
+            const sortedStocks = getSortedData(dashboardData.stocks, currentSort.sector);
+            
+            sortedStocks.forEach(stock => {
                 const price = stock.price ? stock.price.toLocaleString('en-IN', {maximumFractionDigits: 2}) : 'N/A';
                 const pChg = stock.price_change ? stock.price_change.toFixed(2) : '0.00';
                 const oiChg = stock.oi_change ? stock.oi_change.toFixed(2) : '0.00';
@@ -662,13 +868,18 @@
                     </tr>
                 `;
             });
+        }
 
-            // Render Global Most Active Table
+        // Render Active Table based on current sort settings
+        function renderActiveTable() {
+            if (!dashboardData) return;
             const tbodyActive = document.getElementById('active-table-body');
             tbodyActive.innerHTML = '';
             
-            if (data.active_futures && data.active_futures.length > 0) {
-                data.active_futures.forEach(stock => {
+            const sortedActive = getSortedData(dashboardData.active_futures, currentSort.active);
+            
+            if (sortedActive.length > 0) {
+                sortedActive.forEach(stock => {
                     const price = stock.price ? stock.price.toLocaleString('en-IN', {maximumFractionDigits: 2}) : 'N/A';
                     const pChg = stock.price_change ? stock.price_change.toFixed(2) : '0.00';
                     const oiChg = stock.oi_change ? stock.oi_change.toFixed(2) : '0.00';
@@ -699,9 +910,6 @@
             } else {
                 tbodyActive.innerHTML = '<tr><td colspan="6" style="text-align: center; color: var(--text-secondary);">No active futures data found.</td></tr>';
             }
-
-            // Display grid
-            document.getElementById('dashboard').classList.add('loaded');
         }
 
         function showError(msg) {
