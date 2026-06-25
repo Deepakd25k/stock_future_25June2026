@@ -377,6 +377,11 @@
             font-weight: 600;
         }
 
+        .yellow-text {
+            color: var(--primary-gold);
+            font-weight: 600;
+        }
+
         .buildup-badge {
             padding: 0.25rem 0.75rem;
             border-radius: 6px;
@@ -503,6 +508,32 @@
                 </div>
             </div>
 
+            <!-- FII PARTICIPANT OPEN INTEREST TREND CARD -->
+            <div class="card full-width-card" style="border: 1px solid rgba(59, 130, 246, 0.15);">
+                <div class="card-header">
+                    <div class="card-title">🏛️ FII Participant Open Interest Trend (Last 5 Days)</div>
+                    <span style="color: var(--primary-blue); font-size: 0.75rem; font-weight: 700; text-transform: uppercase; border: 1px solid rgba(59, 130, 246, 0.2); padding: 0.2rem 0.5rem; border-radius: 4px;">F&O Derivative Segment</span>
+                </div>
+                <div class="table-container">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Date</th>
+                                <th style="text-align: right;">Index Long</th>
+                                <th style="text-align: right;">Index Short</th>
+                                <th style="text-align: center;">Index L/S Ratio</th>
+                                <th style="text-align: right;">Stock Long</th>
+                                <th style="text-align: right;">Stock Short</th>
+                                <th style="text-align: center;">Stock L/S Ratio</th>
+                            </tr>
+                        </thead>
+                        <tbody id="fii-trend-table-body">
+                            <!-- Dynamic FII Trend Rows -->
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
             <!-- SECTORAL RANKINGS CARD -->
             <div class="card">
                 <div class="card-header">
@@ -522,10 +553,10 @@
                         <div class="sort-control-container">
                             <span>Sort By:</span>
                             <select id="sector-sort-select" class="sort-select" onchange="applyCustomSort('sector')">
+                                <option value="momentum" selected>Directional Force (Price % × OI %)</option>
                                 <option value="default">Default Buildup</option>
                                 <option value="price_change">Price Change %</option>
                                 <option value="oi_change">OI Change %</option>
-                                <option value="momentum">Momentum (Price × OI)</option>
                             </select>
                         </div>
                         <div id="sector-breadth-badge" class="buildup-badge long-buildup">Breadth: Strong</div>
@@ -558,10 +589,10 @@
                         <div class="sort-control-container">
                             <span>Sort By:</span>
                             <select id="active-sort-select" class="sort-select" onchange="applyCustomSort('active')">
+                                <option value="momentum" selected>Directional Force (Price % × OI %)</option>
                                 <option value="value_crores">Traded Value (Default)</option>
                                 <option value="price_change">Price Change %</option>
                                 <option value="oi_change">OI Change %</option>
-                                <option value="momentum">Momentum (Price × OI)</option>
                             </select>
                         </div>
                         <span style="color: var(--primary-blue); font-size: 0.75rem; font-weight: 700; text-transform: uppercase; border: 1px solid rgba(59, 130, 246, 0.2); padding: 0.2rem 0.5rem; border-radius: 4px;">F&O Market Segment</span>
@@ -597,8 +628,8 @@
         // Global variables to store parsed dashboard state
         let dashboardData = null;
         let currentSort = {
-            sector: { key: 'default', asc: false },
-            active: { key: 'value_crores', asc: false }
+            sector: { key: 'momentum', asc: false },
+            active: { key: 'momentum', asc: false }
         };
         let countdownValue = 180; // 3 minutes in seconds
         let countdownInterval = null;
@@ -724,9 +755,9 @@
                     // Then by OI change descending
                     return (b.oi_change || 0) - (a.oi_change || 0);
                 } else if (key === 'momentum') {
-                    // Momentum Score = Price Change × OI Change (positive momentum only)
-                    valA = (a.price_change || 0) * (a.oi_change || 0);
-                    valB = (b.price_change || 0) * (b.oi_change || 0);
+                    // Momentum Score = Absolute Price Change % × Absolute OI Change %
+                    valA = Math.abs(a.price_change || 0) * Math.abs(a.oi_change || 0);
+                    valB = Math.abs(b.price_change || 0) * Math.abs(b.oi_change || 0);
                 } else {
                     valA = a[key];
                     valB = b[key];
@@ -827,6 +858,33 @@
 
             // 4. Render Global Active Table
             renderActiveTable();
+
+            // 5. Render FII Trend Table
+            const fiiTbody = document.getElementById('fii-trend-table-body');
+            fiiTbody.innerHTML = '';
+            if (dashboardData.fii_trend && dashboardData.fii_trend.length > 0) {
+                dashboardData.fii_trend.forEach(row => {
+                    const idxRatio = row.index_ratio.toFixed(1);
+                    const stkRatio = row.stock_ratio.toFixed(1);
+                    
+                    const idxClass = row.index_ratio >= 60 ? 'green-text' : row.index_ratio >= 45 ? 'yellow-text' : 'red-text';
+                    const stkClass = row.stock_ratio >= 60 ? 'green-text' : row.stock_ratio >= 45 ? 'yellow-text' : 'red-text';
+                    
+                    fiiTbody.innerHTML += `
+                        <tr>
+                            <td><strong>${row.date_formatted}</strong></td>
+                            <td style="text-align: right;">${row.index_long.toLocaleString('en-IN')}</td>
+                            <td style="text-align: right;">${row.index_short.toLocaleString('en-IN')}</td>
+                            <td style="text-align: center;"><span class="${idxClass}">${idxRatio}%</span></td>
+                            <td style="text-align: right;">${row.stock_long.toLocaleString('en-IN')}</td>
+                            <td style="text-align: right;">${row.stock_short.toLocaleString('en-IN')}</td>
+                            <td style="text-align: center;"><span class="${stkClass}">${stkRatio}%</span></td>
+                        </tr>
+                    `;
+                });
+            } else {
+                fiiTbody.innerHTML = '<tr><td colspan="7" style="text-align: center; color: var(--text-secondary);">No FII trend data found.</td></tr>';
+            }
 
             // Display grid
             document.getElementById('dashboard').classList.add('loaded');

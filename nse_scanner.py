@@ -2,7 +2,9 @@ import os
 import sys
 import json
 import time
+import datetime
 import requests
+import io
 import pandas as pd
 import yfinance as yf
 from rich.console import Console
@@ -12,6 +14,9 @@ from rich.text import Text
 
 # Initialize Rich Console for beautiful terminal formatting
 console = Console()
+
+# Cache file path for FII historical trend
+CACHE_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'fii_historical_cache.json')
 
 # Sector to F&O Constituents Map (Hardcoded for high stability and speed)
 SECTOR_MAP = {
@@ -40,7 +45,7 @@ def init_nse_session():
     s.headers.update(HEADERS)
     try:
         s.get("https://www.nseindia.com", timeout=10)
-        time.sleep(2)
+        time.sleep(1.5)
         s.get("https://www.nseindia.com/market-data/equity-derivatives-watch", timeout=10)
         time.sleep(1)
         return s
@@ -136,8 +141,97 @@ def fetch_yfinance_prices(symbols):
     except Exception as e:
         return {}
 
+def parse_fii_oi_csv(csv_text, date_formatted, date_key):
+    """Parses FII Open Interest data from the downloaded CSV text."""
+    try:
+        # Read CSV skipping the first row (Participant Open Interest...)
+        df = pd.read_csv(io.StringIO(csv_text), skiprows=1)
+        df.columns = df.columns.str.strip()
+        df['Client Type'] = df['Client Type'].str.strip()
+        
+        fii_row = df[df['Client Type'] == 'FII']
+        if not fii_row.empty:
+            idx_long = int(fii_row.iloc[0]['Future Index Long'])
+            idx_short = int(fii_row.iloc[0]['Future Index Short'])
+            stk_long = int(fii_row.iloc[0]['Future Stock Long'])
+            stk_short = int(fii_row.iloc[0]['Future Stock Short'])
+            
+            idx_total = idx_long + idx_short
+            stk_total = stk_long + stk_short
+            
+            idx_ratio = (idx_long / idx_total) * 100 if idx_total > 0 else 0.0
+            stk_ratio = (stk_long / stk_total) * 100 if stk_total > 0 else 0.0
+            
+            return {
+                "date_formatted": date_formatted,
+                "date_key": date_key,
+                "index_long": idx_long,
+                "index_short": idx_short,
+                "index_ratio": idx_ratio,
+                "stock_long": stk_long,
+                "stock_short": stk_short,
+                "stock_ratio": stk_ratio
+            }
+    except Exception as e:
+        pass
+    return None
+
+def fetch_fii_trend_data():
+    """Fetches FII trend data for the last 5 trading days using caching."""
+    # 1. Load cache
+    cache = {}
+    if os.path.exists(CACHE_FILE):
+        try:
+            with open(CACHE_FILE, 'r') as f:
+                cache = json.load(f)
+        except Exception:
+            cache = {}
+            
+    # 2. Fetch missing dates going back day-by-day
+    successful_days = []
+    
+    # We will search up to 15 calendar days back to ensure we get 5 successful trading days
+    for i in range(15):
+        date_to_check = datetime.datetime.now() - datetime.timedelta(days=i)
+        # Format as DDMMYYYY for URL and YYYY-MM-DD for key
+        date_str = date_to_check.strftime("%d%m%Y")
+        date_formatted = date_to_check.strftime("%d-%b-%Y")
+        
+        # Check cache first
+        if date_str in cache:
+            successful_days.append(cache[date_str])
+            if len(successful_days) == 5:
+                break
+            continue
+            
+        # Download from archives.nseindia.com (No Akamai protection, easy standard requests)
+        url = f"https://archives.nseindia.com/content/nsccl/fao_participant_oi_{date_str}.csv"
+        try:
+            r = requests.get(url, headers=HEADERS, timeout=5)
+            if r.status_code == 200:
+                parsed = parse_fii_oi_csv(r.text, date_formatted, date_str)
+                if parsed:
+                    cache[date_str] = parsed
+                    successful_days.append(parsed)
+                    if len(successful_days) == 5:
+                        break
+        except Exception:
+            pass
+            
+    # Save cache
+    try:
+        with open(CACHE_FILE, 'w') as f:
+            json.dump(cache, f, indent=2)
+    except Exception:
+        pass
+        
+    # Sort successful days by date ascending (oldest first)
+    successful_days.sort(key=lambda x: datetime.datetime.strptime(x['date_key'], "%d%m%Y"))
+    return successful_days
+
 def run_scan():
     """Runs the scan and returns a structured dictionary of data."""
+    # Fetch Sector and F&O data
     session = init_nse_session()
     if not session:
         return {"error": "Could not connect to NSE"}
@@ -157,12 +251,14 @@ def run_scan():
     if oi_df is None or oi_df.empty:
         return {"error": "OI data not found"}
         
-    # Get Global Most Active Futures (Top 10 by Traded Value in Crores)
     active_df = oi_df.sort_values(by='fut_value', ascending=False).head(10)
     active_symbols = active_df['symbol'].tolist()
     
-    # Combine all symbols to fetch prices in one single yfinance call
+    # Combine all symbols and filter out indices before querying yfinance
     all_symbols = list(set(sector_constituents + active_symbols))
+    index_symbols = ['NIFTY', 'BANKNIFTY', 'FINNIFTY', 'MIDCPNIFTY']
+    all_symbols = [sym for sym in all_symbols if sym not in index_symbols]
+    
     price_map = fetch_yfinance_prices(all_symbols)
     
     # Process Sectoral Stocks
@@ -218,6 +314,10 @@ def run_scan():
     # Process Global Most Active Futures
     active_stocks = []
     for symbol in active_symbols:
+        # Skip index contracts from display table if they occur in active list
+        if symbol in index_symbols:
+            continue
+            
         symbol_oi_row = oi_df[oi_df['symbol'] == symbol]
         oi_change = symbol_oi_row.iloc[0]['oi_change']
         volume = symbol_oi_row.iloc[0]['volume']
@@ -251,7 +351,7 @@ def run_scan():
         
     act_df = pd.DataFrame(active_stocks).sort_values(by='value_crores', ascending=False)
     
-    # Calculate recommendations (Prioritize Long Buildup from Top Sector first, then Global Active ones)
+    # Calculate recommendations
     recommendations = []
     long_buildup_sector = sec_df[sec_df['buildup'] == 'Long Buildup']
     long_buildup_active = act_df[act_df['buildup'] == 'Long Buildup']
@@ -259,13 +359,11 @@ def run_scan():
     if len(long_buildup_sector) >= 1:
         recommendations.append(long_buildup_sector.iloc[0].to_dict())
     if len(long_buildup_active) >= 1:
-        # Avoid duplicate recommendation
         rec1_sym = recommendations[0]['symbol'] if recommendations else ""
         active_rec = long_buildup_active[long_buildup_active['symbol'] != rec1_sym]
         if not active_rec.empty:
             recommendations.append(active_rec.iloc[0].to_dict())
             
-    # Fallbacks if we don't have enough Long Buildup stocks
     if len(recommendations) < 2:
         for stock in long_buildup_sector.to_dict(orient='records'):
             if stock['symbol'] not in [r['symbol'] for r in recommendations]:
@@ -297,6 +395,9 @@ def run_scan():
             clean_list.append(clean_rec)
         return clean_list
         
+    # Fetch FII Open Interest Trend (Last 5 trading days)
+    fii_trend = fetch_fii_trend_data()
+        
     return {
         "success": True,
         "timestamp": time.strftime("%Y-%m-%d %H:%M:%S"),
@@ -308,7 +409,8 @@ def run_scan():
         "sectors": clean_records(sectors_df.to_dict(orient='records')),
         "stocks": clean_records(sec_df.to_dict(orient='records')),
         "active_futures": clean_records(act_df.to_dict(orient='records')),
-        "recommendations": clean_records(recommendations)
+        "recommendations": clean_records(recommendations),
+        "fii_trend": fii_trend
     }
 
 def print_cli_results(result):
@@ -317,6 +419,31 @@ def print_cli_results(result):
         return
         
     console.print(Panel("[bold green]NSE Sector & Stock Futures OI Buildup Scanner[/bold green]", subtitle="FII & Pro Money Flow Tracker"))
+    
+    # FII Open Interest Trend Table
+    table_fii = Table(title="🏛️ FII Participant Open Interest Trend (Last 5 Days)")
+    table_fii.add_column("Date", style="bold")
+    table_fii.add_column("Index Long", justify="right")
+    table_fii.add_column("Index Short", justify="right")
+    table_fii.add_column("Index L/S Ratio", justify="center", style="bold")
+    table_fii.add_column("Stock Long", justify="right")
+    table_fii.add_column("Stock Short", justify="right")
+    table_fii.add_column("Stock L/S Ratio", justify="center", style="bold")
+    
+    for row in result['fii_trend']:
+        idx_color = "green" if row['index_ratio'] >= 60 else "yellow" if row['index_ratio'] >= 45 else "red"
+        stk_color = "green" if row['stock_ratio'] >= 60 else "yellow" if row['stock_ratio'] >= 45 else "red"
+        
+        table_fii.add_row(
+            row['date_formatted'],
+            f"{row['index_long']:,}",
+            f"{row['index_short']:,}",
+            f"[{idx_color}]{row['index_ratio']:.1f}%[/{idx_color}]",
+            f"{row['stock_long']:,}",
+            f"{row['stock_short']:,}",
+            f"[{stk_color}]{row['stock_ratio']:.1f}%[/{stk_color}]"
+        )
+    console.print(table_fii)
     
     # Recommendations
     console.print("\n[bold gold3]================================================================[/bold gold3]")
@@ -331,34 +458,6 @@ def print_cli_results(result):
         oi_chg_str = f"{rec['oi_change']:+.2f}%" if rec['oi_change'] else "N/A"
         val_str = f"{rec['value_crores']:.1f} Cr" if rec['value_crores'] else "0.0 Cr"
         console.print(f"   LTP: {price_str} | Price Change: {p_chg_str} | OI Change: {oi_chg_str} | Traded Value: {val_str}")
-
-    # Global Most Active Table
-    table_act = Table(title="🔥 Global Most Active Stock Futures (Ranked by Value in Crores)")
-    table_act.add_column("Symbol", style="bold")
-    table_act.add_column("LTP (Rs.)", justify="right")
-    table_act.add_column("Price Change %", justify="right")
-    table_act.add_column("OI Change %", justify="right")
-    table_act.add_column("Traded Value (Crores)", justify="right", style="bold yellow")
-    table_act.add_column("Buildup Category", justify="center")
-    
-    for row in result['active_futures']:
-        p_chg_str = f"{row['price_change']:+.2f}%" if row['price_change'] is not None else "N/A"
-        p_chg_color = "green" if (row['price_change'] and row['price_change'] > 0) else "red" if (row['price_change'] and row['price_change'] < 0) else "white"
-        oi_chg_str = f"{row['oi_change']:+.2f}%" if row['oi_change'] is not None else "N/A"
-        oi_chg_color = "green" if (row['oi_change'] and row['oi_change'] > 0) else "red" if (row['oi_change'] and row['oi_change'] < 0) else "white"
-        price_str = f"{row['price']:,.2f}" if row['price'] is not None else "N/A"
-        buildup = row['buildup']
-        b_style = "bold green" if buildup == "Long Buildup" else "bold red" if buildup == "Short Buildup" else "green" if buildup == "Short Covering" else "red" if buildup == "Long Unwinding" else "white"
-        
-        table_act.add_row(
-            row['symbol'],
-            price_str,
-            f"[{p_chg_color}]{p_chg_str}[/{p_chg_color}]",
-            f"[{oi_chg_color}]{oi_chg_str}[/{oi_chg_color}]",
-            f"₹{row['value_crores']:,.2f} Cr",
-            f"[{b_style}]{buildup}[/{b_style}]"
-        )
-    console.print(table_act)
 
 if __name__ == "__main__":
     result = run_scan()
