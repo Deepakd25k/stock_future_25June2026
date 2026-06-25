@@ -482,12 +482,37 @@
                                 <th style="text-align: right;">LTP (Rs.)</th>
                                 <th style="text-align: right;">Price Chg %</th>
                                 <th style="text-align: right;">OI Chg %</th>
-                                <th style="text-align: right; font-weight: 400; color: var(--text-secondary);">Volume</th>
+                                <th style="text-align: right; font-weight: 400; color: var(--text-secondary);">Value</th>
                                 <th style="text-align: center;">Buildup Type</th>
                             </tr>
                         </thead>
                         <tbody id="stocks-table-body">
                             <!-- Dynamic Table Rows -->
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- GLOBAL MOST ACTIVE STOCK FUTURES (USER REQUESTED) -->
+            <div class="card full-width-card" style="border: 1px solid rgba(59, 130, 246, 0.15);">
+                <div class="card-header" style="flex-wrap: wrap; gap: 0.5rem;">
+                    <div class="card-title">🔥 Global Most Active Stock Futures (NSE Market Watch)</div>
+                    <span style="color: var(--primary-blue); font-size: 0.75rem; font-weight: 700; text-transform: uppercase; border: 1px solid rgba(59, 130, 246, 0.2); padding: 0.2rem 0.5rem; border-radius: 4px;">Ranked by Value in Crores</span>
+                </div>
+                <div class="table-container">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Symbol</th>
+                                <th style="text-align: right;">LTP (Rs.)</th>
+                                <th style="text-align: right;">Price Chg %</th>
+                                <th style="text-align: right;">OI Chg %</th>
+                                <th style="text-align: right; color: var(--primary-gold); font-weight: 700;">Value (Crores)</th>
+                                <th style="text-align: center;">Buildup Type</th>
+                            </tr>
+                        </thead>
+                        <tbody id="active-table-body">
+                            <!-- Dynamic Active Futures Rows -->
                         </tbody>
                     </table>
                 </div>
@@ -544,11 +569,15 @@
                     const oiChg = rec.oi_change ? rec.oi_change.toFixed(2) : '0.00';
                     const priceClass = rec.price_change >= 0 ? 'green-text' : 'red-text';
                     const oiClass = rec.oi_change >= 0 ? 'green-text' : 'red-text';
+                    const valText = rec.value_crores ? `₹${rec.value_crores.toFixed(1)} Cr` : '';
                     
                     recContainer.innerHTML += `
                         <div class="rec-item">
                             <span class="rec-tag ${tagClass}">${tagText}</span>
-                            <div class="rec-symbol">${rec.symbol}</div>
+                            <div style="display:flex; justify-content:space-between; align-items:center;">
+                                <div class="rec-symbol">${rec.symbol}</div>
+                                <span style="font-size:0.75rem; color:var(--primary-gold); font-weight:600;">${valText}</span>
+                            </div>
                             <div class="rec-details">
                                 <div class="rec-ltp">₹ ${priceVal}</div>
                                 <div class="rec-changes">
@@ -601,7 +630,7 @@
                 breadthBadge.innerText += " (Weak)";
             }
 
-            // Render Stock Table
+            // Render Sectoral Stock Table
             const tbody = document.getElementById('stocks-table-body');
             tbody.innerHTML = '';
             
@@ -609,6 +638,7 @@
                 const price = stock.price ? stock.price.toLocaleString('en-IN', {maximumFractionDigits: 2}) : 'N/A';
                 const pChg = stock.price_change ? stock.price_change.toFixed(2) : '0.00';
                 const oiChg = stock.oi_change ? stock.oi_change.toFixed(2) : '0.00';
+                const valueText = stock.value_crores ? `₹${stock.value_crores.toFixed(1)} Cr` : '0.0 Cr';
                 
                 const pClass = stock.price_change >= 0 ? 'green-text' : 'red-text';
                 const oiClass = stock.oi_change >= 0 ? 'green-text' : 'red-text';
@@ -625,13 +655,50 @@
                         <td style="text-align: right;">₹ ${price}</td>
                         <td style="text-align: right;" class="${pClass}">${pChg >= 0 ? '+' : ''}${pChg}%</td>
                         <td style="text-align: right;" class="${oiClass}">${oiChg >= 0 ? '+' : ''}${oiChg}%</td>
-                        <td style="text-align: right; color: var(--text-secondary);" class="dim">${stock.volume.toLocaleString('en-IN')}</td>
+                        <td style="text-align: right; color: var(--text-secondary);" class="dim">${valueText}</td>
                         <td style="text-align: center;">
                             <span class="buildup-badge ${bClass}">${stock.buildup}</span>
                         </td>
                     </tr>
                 `;
             });
+
+            // Render Global Most Active Table
+            const tbodyActive = document.getElementById('active-table-body');
+            tbodyActive.innerHTML = '';
+            
+            if (data.active_futures && data.active_futures.length > 0) {
+                data.active_futures.forEach(stock => {
+                    const price = stock.price ? stock.price.toLocaleString('en-IN', {maximumFractionDigits: 2}) : 'N/A';
+                    const pChg = stock.price_change ? stock.price_change.toFixed(2) : '0.00';
+                    const oiChg = stock.oi_change ? stock.oi_change.toFixed(2) : '0.00';
+                    const valueText = stock.value_crores ? `₹${stock.value_crores.toFixed(1)} Cr` : '0.0 Cr';
+                    
+                    const pClass = stock.price_change >= 0 ? 'green-text' : 'red-text';
+                    const oiClass = stock.oi_change >= 0 ? 'green-text' : 'red-text';
+                    
+                    let bClass = 'neutral';
+                    if (stock.buildup === "Long Buildup") bClass = 'long-buildup';
+                    else if (stock.buildup === "Short Buildup") bClass = 'short-buildup';
+                    else if (stock.buildup === "Short Covering") bClass = 'short-covering';
+                    else if (stock.buildup === "Long Unwinding") bClass = 'long-unwinding';
+                    
+                    tbodyActive.innerHTML += `
+                        <tr>
+                            <td><strong>${stock.symbol}</strong></td>
+                            <td style="text-align: right;">₹ ${price}</td>
+                            <td style="text-align: right;" class="${pClass}">${pChg >= 0 ? '+' : ''}${pChg}%</td>
+                            <td style="text-align: right;" class="${oiClass}">${oiChg >= 0 ? '+' : ''}${oiChg}%</td>
+                            <td style="text-align: right; font-weight: 700; color: var(--primary-gold);">${valueText}</td>
+                            <td style="text-align: center;">
+                                <span class="buildup-badge ${bClass}">${stock.buildup}</span>
+                            </td>
+                        </tr>
+                    `;
+                });
+            } else {
+                tbodyActive.innerHTML = '<tr><td colspan="6" style="text-align: center; color: var(--text-secondary);">No active futures data found.</td></tr>';
+            }
 
             // Display grid
             document.getElementById('dashboard').classList.add('loaded');
