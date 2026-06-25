@@ -519,11 +519,14 @@
                         <thead>
                             <tr>
                                 <th>Date</th>
+                                <th style="text-align: right;">Nifty 50</th>
                                 <th style="text-align: right;">Index Long</th>
                                 <th style="text-align: right;">Index Short</th>
+                                <th style="text-align: right;">Index Net (Chg)</th>
                                 <th style="text-align: center;">Index L/S Ratio</th>
                                 <th style="text-align: right;">Stock Long</th>
                                 <th style="text-align: right;">Stock Short</th>
+                                <th style="text-align: right;">Stock Net (Chg)</th>
                                 <th style="text-align: center;">Stock L/S Ratio</th>
                             </tr>
                         </thead>
@@ -870,20 +873,44 @@
                     const idxClass = row.index_ratio >= 60 ? 'green-text' : row.index_ratio >= 45 ? 'yellow-text' : 'red-text';
                     const stkClass = row.stock_ratio >= 60 ? 'green-text' : row.stock_ratio >= 45 ? 'yellow-text' : 'red-text';
                     
+                    // Nifty rendering
+                    let niftyHtml = 'N/A';
+                    if (row.nifty_close) {
+                        const niftyClose = row.nifty_close.toLocaleString('en-IN', {maximumFractionDigits: 2});
+                        const niftyChg = row.nifty_change.toFixed(2);
+                        const niftyClass = row.nifty_change >= 0 ? 'green-text' : 'red-text';
+                        niftyHtml = `₹ ${niftyClose}<br><small class="${niftyClass}">${row.nifty_change >= 0 ? '+' : ''}${niftyChg}%</small>`;
+                    }
+                    
+                    // Index Net Rendering
+                    const idxNet = row.index_net;
+                    const idxNetChg = row.index_net_change;
+                    const idxChgClass = idxNetChg > 0 ? 'green-text' : idxNetChg < 0 ? 'red-text' : '';
+                    const idxNetHtml = `<strong>${idxNet.toLocaleString('en-IN')}</strong><br><small class="${idxChgClass}">${idxNetChg >= 0 ? '+' : ''}${idxNetChg.toLocaleString('en-IN')}</small>`;
+                    
+                    // Stock Net Rendering
+                    const stkNet = row.stock_net;
+                    const stkNetChg = row.stock_net_change;
+                    const stkChgClass = stkNetChg > 0 ? 'green-text' : stkNetChg < 0 ? 'red-text' : '';
+                    const stkNetHtml = `<strong>${stkNet.toLocaleString('en-IN')}</strong><br><small class="${stkChgClass}">${stkNetChg >= 0 ? '+' : ''}${stkNetChg.toLocaleString('en-IN')}</small>`;
+                    
                     fiiTbody.innerHTML += `
                         <tr>
                             <td><strong>${row.date_formatted}</strong></td>
+                            <td style="text-align: right; line-height: 1.2;">${niftyHtml}</td>
                             <td style="text-align: right;">${row.index_long.toLocaleString('en-IN')}</td>
                             <td style="text-align: right;">${row.index_short.toLocaleString('en-IN')}</td>
+                            <td style="text-align: right; line-height: 1.2;">${idxNetHtml}</td>
                             <td style="text-align: center;"><span class="${idxClass}">${idxRatio}%</span></td>
                             <td style="text-align: right;">${row.stock_long.toLocaleString('en-IN')}</td>
                             <td style="text-align: right;">${row.stock_short.toLocaleString('en-IN')}</td>
+                            <td style="text-align: right; line-height: 1.2;">${stkNetHtml}</td>
                             <td style="text-align: center;"><span class="${stkClass}">${stkRatio}%</span></td>
                         </tr>
                     `;
                 });
             } else {
-                fiiTbody.innerHTML = '<tr><td colspan="7" style="text-align: center; color: var(--text-secondary);">No FII trend data found.</td></tr>';
+                fiiTbody.innerHTML = '<tr><td colspan="10" style="text-align: center; color: var(--text-secondary);">No FII trend data found.</td></tr>';
             }
 
             // Display grid

@@ -177,7 +177,7 @@ def parse_fii_oi_csv(csv_text, date_formatted, date_key):
     return None
 
 def fetch_fii_trend_data():
-    """Fetches FII trend data for the last 5 trading days using caching."""
+    """Fetches FII trend data for the last 5 trading days using caching, including Nifty 50 close/change."""
     # 1. Load cache
     cache = {}
     if os.path.exists(CACHE_FILE):
@@ -227,6 +227,53 @@ def fetch_fii_trend_data():
         
     # Sort successful days by date ascending (oldest first)
     successful_days.sort(key=lambda x: datetime.datetime.strptime(x['date_key'], "%d%m%Y"))
+    
+    # Fetch Nifty data for mapping close prices and percent changes
+    nifty_map = {}
+    try:
+        nifty = yf.download("^NSEI", period="20d", progress=False)
+        if not nifty.empty:
+            if isinstance(nifty.columns, pd.MultiIndex):
+                nifty.columns = nifty.columns.get_level_values(0)
+            nifty['pct_change'] = nifty['Close'].pct_change() * 100
+            for dt, row in nifty.iterrows():
+                # Format dt to %d%m%Y to match date_str key (e.g. 24062026)
+                d_key = dt.strftime("%d%m%Y")
+                close_val = float(row['Close'])
+                change_val = float(row['pct_change'])
+                nifty_map[d_key] = {
+                    "nifty_close": close_val,
+                    "nifty_change": change_val if not pd.isna(change_val) else 0.0
+                }
+    except Exception as e:
+        pass
+        
+    # Calculate Net positions, Day-over-Day Changes, and map Nifty performance
+    for idx in range(len(successful_days)):
+        day = successful_days[idx]
+        
+        # Calculate Index Net and Stock Net
+        day['index_net'] = day['index_long'] - day['index_short']
+        day['stock_net'] = day['stock_long'] - day['stock_short']
+        
+        # Calculate Net Change compared to previous day
+        if idx == 0:
+            day['index_net_change'] = 0
+            day['stock_net_change'] = 0
+        else:
+            prev_day = successful_days[idx - 1]
+            day['index_net_change'] = day['index_net'] - prev_day['index_net']
+            day['stock_net_change'] = day['stock_net'] - prev_day['stock_net']
+            
+        # Map Nifty close & change
+        d_key = day['date_key']
+        if d_key in nifty_map:
+            day['nifty_close'] = nifty_map[d_key]['nifty_close']
+            day['nifty_change'] = nifty_map[d_key]['nifty_change']
+        else:
+            day['nifty_close'] = None
+            day['nifty_change'] = None
+            
     return successful_days
 
 def run_scan():
@@ -423,24 +470,46 @@ def print_cli_results(result):
     # FII Open Interest Trend Table
     table_fii = Table(title="🏛️ FII Participant Open Interest Trend (Last 5 Days)")
     table_fii.add_column("Date", style="bold")
+    table_fii.add_column("Nifty 50", justify="right")
     table_fii.add_column("Index Long", justify="right")
     table_fii.add_column("Index Short", justify="right")
-    table_fii.add_column("Index L/S Ratio", justify="center", style="bold")
+    table_fii.add_column("Index Net (Chg)", justify="right", style="bold")
+    table_fii.add_column("Index L/S %", justify="center", style="bold")
     table_fii.add_column("Stock Long", justify="right")
     table_fii.add_column("Stock Short", justify="right")
-    table_fii.add_column("Stock L/S Ratio", justify="center", style="bold")
+    table_fii.add_column("Stock Net (Chg)", justify="right", style="bold")
+    table_fii.add_column("Stock L/S %", justify="center", style="bold")
     
     for row in result['fii_trend']:
         idx_color = "green" if row['index_ratio'] >= 60 else "yellow" if row['index_ratio'] >= 45 else "red"
         stk_color = "green" if row['stock_ratio'] >= 60 else "yellow" if row['stock_ratio'] >= 45 else "red"
         
+        # Nifty formatting
+        nifty_str = "N/A"
+        if row.get('nifty_close'):
+            nifty_str = f"{row['nifty_close']:,.2f} ({row['nifty_change']:+.2f}%)"
+            
+        # Net change formatting
+        idx_net_val = row['index_net']
+        idx_net_chg = row['index_net_change']
+        idx_net_str = f"{idx_net_val:+,} ({idx_net_chg:+,})"
+        idx_net_color = "green" if idx_net_chg > 0 else "red" if idx_net_chg < 0 else "white"
+        
+        stk_net_val = row['stock_net']
+        stk_net_chg = row['stock_net_change']
+        stk_net_str = f"{stk_net_val:+,} ({stk_net_chg:+,})"
+        stk_net_color = "green" if stk_net_chg > 0 else "red" if stk_net_chg < 0 else "white"
+        
         table_fii.add_row(
             row['date_formatted'],
+            nifty_str,
             f"{row['index_long']:,}",
             f"{row['index_short']:,}",
+            f"[{idx_net_color}]{idx_net_str}[/{idx_net_color}]",
             f"[{idx_color}]{row['index_ratio']:.1f}%[/{idx_color}]",
             f"{row['stock_long']:,}",
             f"{row['stock_short']:,}",
+            f"[{stk_net_color}]{stk_net_str}[/{stk_net_color}]",
             f"[{stk_color}]{row['stock_ratio']:.1f}%[/{stk_color}]"
         )
     console.print(table_fii)
