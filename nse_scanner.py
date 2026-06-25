@@ -187,12 +187,19 @@ def fetch_fii_trend_data():
         except Exception:
             cache = {}
             
+    # Calculate current time in IST
+    utc_now = datetime.datetime.now(datetime.timezone.utc)
+    ist_now = utc_now + datetime.timedelta(hours=5, minutes=30)
+    current_ist_hour = ist_now.hour
+    current_ist_minute = ist_now.minute
+    current_ist_time_in_minutes = current_ist_hour * 60 + current_ist_minute
+    
     # 2. Fetch missing dates going back day-by-day
     successful_days = []
     
     # We will search up to 15 calendar days back to ensure we get 5 successful trading days
     for i in range(15):
-        date_to_check = datetime.datetime.now() - datetime.timedelta(days=i)
+        date_to_check = ist_now - datetime.timedelta(days=i)
         # Format as DDMMYYYY for URL and YYYY-MM-DD for key
         date_str = date_to_check.strftime("%d%m%Y")
         date_formatted = date_to_check.strftime("%d-%b-%Y")
@@ -202,6 +209,10 @@ def fetch_fii_trend_data():
             successful_days.append(cache[date_str])
             if len(successful_days) == 5:
                 break
+            continue
+            
+        # Optimization: Do not try to download today's FII file if it's before 6:30 PM IST (18:30)
+        if i == 0 and current_ist_time_in_minutes < 1110:
             continue
             
         # Download from archives.nseindia.com (No Akamai protection, easy standard requests)
@@ -515,7 +526,7 @@ def run_scan():
         
     return {
         "success": True,
-        "timestamp": time.strftime("%Y-%m-%d %H:%M:%S"),
+        "timestamp": (datetime.datetime.now(datetime.timezone.utc) + datetime.timedelta(hours=5, minutes=30)).strftime("%Y-%m-%d %H:%M:%S IST"),
         "top_sector": top_sector,
         "sector_change": float(top_sector_change),
         "sector_breadth": float(top_sector_breadth),

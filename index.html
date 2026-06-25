@@ -668,12 +668,48 @@
             }
         }
 
+        function isMarketOpen() {
+            const now = new Date();
+            // Convert to IST (Indian Standard Time)
+            const istTime = new Date(now.toLocaleString("en-US", {timeZone: "Asia/Kolkata"}));
+            const day = istTime.getDay(); // 0 is Sunday, 6 is Saturday
+            const hours = istTime.getHours();
+            const minutes = istTime.getMinutes();
+            
+            // Market closed on weekends (Saturday=6, Sunday=0)
+            if (day === 0 || day === 6) return false;
+            
+            // Market is open on weekdays between 9:15 AM and 3:45 PM IST
+            const currentMinutes = hours * 60 + minutes;
+            const openMinutes = 9 * 60 + 15;
+            const closeMinutes = 15 * 60 + 45; // 3:45 PM (giving post-close buffer)
+            
+            return currentMinutes >= openMinutes && currentMinutes <= closeMinutes;
+        }
+
         // Auto Refresh Countdown Timer
         function startCountdown() {
+            if (countdownInterval) clearInterval(countdownInterval);
+            
+            if (!isMarketOpen()) {
+                document.getElementById('timer-toast').innerText = `⏸️ Market is Closed. Auto-refresh paused.`;
+                document.getElementById('timer-toast').style.color = 'var(--text-secondary)';
+                return;
+            }
+            
+            document.getElementById('timer-toast').style.color = 'var(--primary-green)';
             countdownValue = 180; // Reset to 3 minutes
             updateTimerText();
 
             countdownInterval = setInterval(() => {
+                // Double check if market closed while counting down
+                if (!isMarketOpen()) {
+                    clearInterval(countdownInterval);
+                    document.getElementById('timer-toast').innerText = `⏸️ Market is Closed. Auto-refresh paused.`;
+                    document.getElementById('timer-toast').style.color = 'var(--text-secondary)';
+                    return;
+                }
+
                 countdownValue--;
                 updateTimerText();
 
