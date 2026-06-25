@@ -1,0 +1,649 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SmartMoney - NSE Stock Futures & OI Scanner</title>
+    <!-- Google Fonts: Inter & Outfit -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Outfit:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <style>
+        /* Design System Token System & Theme Setup */
+        :root {
+            --bg-gradient: radial-gradient(circle at 50% 0%, #121826 0%, #0a0d14 100%);
+            --card-bg: rgba(23, 31, 50, 0.45);
+            --card-border: rgba(255, 255, 255, 0.08);
+            --text-primary: #f3f4f6;
+            --text-secondary: #9ca3af;
+            --accent-glow: rgba(16, 185, 129, 0.15);
+            --primary-green: #10b981;
+            --primary-red: #ef4444;
+            --primary-gold: #f59e0b;
+            --primary-blue: #3b82f6;
+            --font-display: 'Outfit', sans-serif;
+            --font-body: 'Inter', sans-serif;
+            --shadow-premium: 0 10px 30px -10px rgba(0, 0, 0, 0.7);
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            background: var(--bg-gradient);
+            color: var(--text-primary);
+            font-family: var(--font-body);
+            min-height: 100vh;
+            padding: 2.5rem 1.5rem;
+            line-height: 1.5;
+            -webkit-font-smoothing: antialiased;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+
+        /* Premium Header Styling */
+        header {
+            text-align: center;
+            margin-bottom: 3rem;
+            position: relative;
+        }
+
+        header h1 {
+            font-family: var(--font-display);
+            font-size: 2.75rem;
+            font-weight: 800;
+            letter-spacing: -0.03em;
+            background: linear-gradient(135deg, #ffffff 40%, #10b981 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            margin-bottom: 0.5rem;
+        }
+
+        header p {
+            color: var(--text-secondary);
+            font-size: 1.1rem;
+            font-weight: 400;
+            margin-bottom: 1.5rem;
+        }
+
+        .badge {
+            display: inline-flex;
+            align-items: center;
+            background: rgba(16, 185, 129, 0.12);
+            color: var(--primary-green);
+            padding: 0.35rem 1rem;
+            border-radius: 9999px;
+            font-size: 0.85rem;
+            font-weight: 600;
+            border: 1px solid rgba(16, 185, 129, 0.25);
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+
+        /* Main Loader Screen */
+        .loader-container {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            padding: 5rem 0;
+        }
+
+        .spinner {
+            width: 50px;
+            height: 50px;
+            border: 3px solid rgba(16, 185, 129, 0.1);
+            border-radius: 50%;
+            border-top-color: var(--primary-green);
+            animation: spin 1s ease-in-out infinite;
+            margin-bottom: 1.5rem;
+            box-shadow: 0 0 20px rgba(16, 185, 129, 0.2);
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        .loader-text {
+            color: var(--text-secondary);
+            font-size: 1rem;
+            font-weight: 500;
+            letter-spacing: 0.02em;
+        }
+
+        /* Dashboard Grid Layout */
+        .dashboard-grid {
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: 2rem;
+            opacity: 0;
+            transform: translateY(20px);
+            transition: opacity 0.6s ease-out, transform 0.6s ease-out;
+        }
+
+        .dashboard-grid.loaded {
+            opacity: 1;
+            transform: translateY(0);
+        }
+
+        @media (min-width: 900px) {
+            .dashboard-grid {
+                grid-template-columns: 350px 1fr;
+            }
+            .full-width-card {
+                grid-column: span 2;
+            }
+        }
+
+        /* Glassmorphism Card Style */
+        .card {
+            background: var(--card-bg);
+            border: 1px solid var(--card-border);
+            border-radius: 1.25rem;
+            padding: 1.75rem;
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            box-shadow: var(--shadow-premium);
+            transition: border-color 0.3s ease, box-shadow 0.3s ease;
+        }
+
+        .card:hover {
+            border-color: rgba(255, 255, 255, 0.15);
+        }
+
+        .card-header {
+            margin-bottom: 1.5rem;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .card-title {
+            font-family: var(--font-display);
+            font-size: 1.25rem;
+            font-weight: 700;
+            color: var(--text-primary);
+        }
+
+        /* Top Recommendations Card styling */
+        .recommendation-card {
+            border: 1px solid rgba(245, 158, 11, 0.2);
+            box-shadow: 0 10px 40px -10px rgba(245, 158, 11, 0.05), var(--shadow-premium);
+            background: linear-gradient(180deg, rgba(23, 31, 50, 0.6) 0%, rgba(13, 18, 30, 0.6) 100%);
+        }
+
+        .rec-container {
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: 1.5rem;
+        }
+
+        @media (min-width: 600px) {
+            .rec-container {
+                grid-template-columns: 1fr 1fr;
+            }
+        }
+
+        .rec-item {
+            background: rgba(255, 255, 255, 0.02);
+            border: 1px solid rgba(255, 255, 255, 0.04);
+            border-radius: 1rem;
+            padding: 1.5rem;
+            position: relative;
+            overflow: hidden;
+            transition: transform 0.2s ease, border-color 0.2s ease;
+        }
+
+        .rec-item:hover {
+            transform: translateY(-2px);
+            border-color: rgba(255, 255, 255, 0.08);
+        }
+
+        .rec-tag {
+            font-size: 0.75rem;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.08em;
+            padding: 0.2rem 0.6rem;
+            border-radius: 4px;
+            display: inline-block;
+            margin-bottom: 0.75rem;
+        }
+
+        .rec-tag.long {
+            background: rgba(16, 185, 129, 0.15);
+            color: var(--primary-green);
+        }
+
+        .rec-tag.short {
+            background: rgba(239, 68, 68, 0.15);
+            color: var(--primary-red);
+        }
+
+        .rec-symbol {
+            font-family: var(--font-display);
+            font-size: 1.6rem;
+            font-weight: 800;
+            margin-bottom: 0.25rem;
+        }
+
+        .rec-details {
+            display: flex;
+            justify-content: space-between;
+            align-items: baseline;
+            border-top: 1px solid rgba(255, 255, 255, 0.05);
+            padding-top: 0.75rem;
+            margin-top: 0.75rem;
+        }
+
+        .rec-ltp {
+            font-size: 1.25rem;
+            font-weight: 700;
+        }
+
+        .rec-changes {
+            font-size: 0.9rem;
+            text-align: right;
+        }
+
+        /* Sector Rankings List */
+        .sector-list {
+            display: flex;
+            flex-direction: column;
+            gap: 1rem;
+        }
+
+        .sector-item {
+            background: rgba(255, 255, 255, 0.015);
+            border: 1px solid rgba(255, 255, 255, 0.03);
+            border-radius: 0.75rem;
+            padding: 1rem;
+            display: flex;
+            flex-direction: column;
+            gap: 0.5rem;
+            transition: background 0.2s ease;
+        }
+
+        .sector-item:hover {
+            background: rgba(255, 255, 255, 0.03);
+        }
+
+        .sector-info {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .sector-name {
+            font-weight: 600;
+            font-size: 0.95rem;
+        }
+
+        .sector-change {
+            font-weight: 700;
+            font-size: 0.95rem;
+        }
+
+        .sector-gauge-bg {
+            height: 5px;
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 99px;
+            overflow: hidden;
+            width: 100%;
+        }
+
+        .sector-gauge-fill {
+            height: 100%;
+            border-radius: 99px;
+        }
+
+        .sector-meta {
+            display: flex;
+            justify-content: space-between;
+            font-size: 0.75rem;
+            color: var(--text-secondary);
+        }
+
+        /* Data Tables Styling */
+        .table-container {
+            width: 100%;
+            overflow-x: auto;
+            border-radius: 0.75rem;
+            border: 1px solid rgba(255, 255, 255, 0.04);
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            text-align: left;
+            font-size: 0.9rem;
+        }
+
+        th {
+            background: rgba(255, 255, 255, 0.02);
+            padding: 1rem;
+            font-weight: 600;
+            color: var(--text-secondary);
+            font-size: 0.8rem;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+        }
+
+        td {
+            padding: 1rem;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.03);
+        }
+
+        tr:last-child td {
+            border-bottom: none;
+        }
+
+        tr:hover td {
+            background: rgba(255, 255, 255, 0.01);
+        }
+
+        .green-text {
+            color: var(--primary-green);
+            font-weight: 600;
+        }
+
+        .red-text {
+            color: var(--primary-red);
+            font-weight: 600;
+        }
+
+        .buildup-badge {
+            padding: 0.25rem 0.75rem;
+            border-radius: 6px;
+            font-size: 0.75rem;
+            font-weight: 600;
+            display: inline-block;
+        }
+
+        .buildup-badge.long-buildup {
+            background: rgba(16, 185, 129, 0.12);
+            color: var(--primary-green);
+            border: 1px solid rgba(16, 185, 129, 0.2);
+        }
+
+        .buildup-badge.short-buildup {
+            background: rgba(239, 68, 68, 0.12);
+            color: var(--primary-red);
+            border: 1px solid rgba(239, 68, 68, 0.2);
+        }
+
+        .buildup-badge.short-covering {
+            background: rgba(59, 130, 246, 0.12);
+            color: var(--primary-blue);
+            border: 1px solid rgba(59, 130, 246, 0.2);
+        }
+
+        .buildup-badge.long-unwinding {
+            background: rgba(245, 158, 11, 0.12);
+            color: var(--primary-gold);
+            border: 1px solid rgba(245, 158, 11, 0.2);
+        }
+
+        .buildup-badge.neutral {
+            background: rgba(255, 255, 255, 0.05);
+            color: var(--text-secondary);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+        }
+
+        .refresh-btn {
+            background: linear-gradient(135deg, var(--primary-green) 0%, #059669 100%);
+            border: none;
+            color: white;
+            padding: 0.6rem 1.5rem;
+            border-radius: 8px;
+            font-weight: 600;
+            font-size: 0.9rem;
+            cursor: pointer;
+            box-shadow: 0 4px 15px rgba(16, 185, 129, 0.25);
+            transition: transform 0.2s ease, box-shadow 0.2s ease;
+            margin-top: 1rem;
+        }
+
+        .refresh-btn:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 6px 20px rgba(16, 185, 129, 0.35);
+        }
+
+        .refresh-btn:active {
+            transform: translateY(1px);
+        }
+
+        .toast {
+            display: inline-block;
+            font-size: 0.8rem;
+            color: var(--text-secondary);
+            margin-top: 0.5rem;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <!-- Dashboard Header -->
+        <header>
+            <span class="badge">FII & Pro Money Flow</span>
+            <h1>SmartMoney Scanner</h1>
+            <p>NSE Stock Futures & Sectoral Buildup Real-time Tracker</p>
+            <div id="status-toast" class="toast">Initializing...</div>
+        </header>
+
+        <!-- Spinner Section -->
+        <div id="loader" class="loader-container">
+            <div class="spinner"></div>
+            <div class="loader-text" id="loader-status">Fetching data from NSE & Yahoo Finance...</div>
+        </div>
+
+        <!-- Dashboard Content Grid -->
+        <div id="dashboard" class="dashboard-grid">
+            
+            <!-- TOP RECOMMENDATIONS CARD -->
+            <div class="card full-width-card recommendation-card">
+                <div class="card-header">
+                    <div class="card-title">🎯 Directional Trade Recommendations</div>
+                    <span style="color: var(--primary-gold); font-size: 0.8rem; font-weight: 700; text-transform: uppercase;">Top 2 Stocks</span>
+                </div>
+                <div id="recommendations-container" class="rec-container">
+                    <!-- Dynamic Recommendation Items -->
+                </div>
+            </div>
+
+            <!-- SECTORAL RANKINGS CARD -->
+            <div class="card">
+                <div class="card-header">
+                    <div class="card-title">📊 Sector Rankings</div>
+                </div>
+                <div id="sector-list" class="sector-list">
+                    <!-- Dynamic Sector List Items -->
+                </div>
+            </div>
+
+            <!-- STOCKS IN ACTIVE SECTOR CARD -->
+            <div class="card">
+                <div class="card-header" style="flex-wrap: wrap; gap: 0.5rem;">
+                    <div class="card-title" id="stocks-title">📈 Stock Analysis</div>
+                    <div id="sector-breadth-badge" class="buildup-badge long-buildup">Breadth: Strong</div>
+                </div>
+                <div class="table-container">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Symbol</th>
+                                <th style="text-align: right;">LTP (Rs.)</th>
+                                <th style="text-align: right;">Price Chg %</th>
+                                <th style="text-align: right;">OI Chg %</th>
+                                <th style="text-align: right; font-weight: 400; color: var(--text-secondary);">Volume</th>
+                                <th style="text-align: center;">Buildup Type</th>
+                            </tr>
+                        </thead>
+                        <tbody id="stocks-table-body">
+                            <!-- Dynamic Table Rows -->
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- BOTTOM UTILITIES -->
+            <div class="full-width-card" style="text-align: center; padding-top: 1rem;">
+                <button class="refresh-btn" onclick="loadDashboardData()">Refresh Live Data</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Fetch and load data
+        async function loadDashboardData() {
+            // Show loader
+            document.getElementById('loader').style.display = 'flex';
+            document.getElementById('dashboard').classList.remove('loaded');
+            document.getElementById('status-toast').innerText = "Connecting to API...";
+            
+            try {
+                // Call Vercel Python Serverless API endpoint
+                const response = await fetch('/api');
+                const data = await response.json();
+                
+                if (data.success) {
+                    renderDashboard(data);
+                    document.getElementById('status-toast').innerText = `Last updated: ${data.timestamp}`;
+                } else {
+                    showError(data.error || "Failed to process market data");
+                }
+            } catch (error) {
+                console.error("API Fetch Error:", error);
+                showError("API Connection failed. Ensure the serverless function is deployed.");
+            } finally {
+                document.getElementById('loader').style.display = 'none';
+            }
+        }
+
+        function renderDashboard(data) {
+            // Render Recommendations
+            const recContainer = document.getElementById('recommendations-container');
+            recContainer.innerHTML = '';
+            
+            if (data.recommendations && data.recommendations.length > 0) {
+                data.recommendations.forEach(rec => {
+                    const isLong = rec.buildup === "Long Buildup";
+                    const isShort = rec.buildup === "Short Buildup";
+                    const tagClass = isLong ? 'long' : isShort ? 'short' : 'long';
+                    const tagText = isLong ? 'Strong Bullish (Long)' : isShort ? 'Strong Bearish (Short)' : rec.buildup;
+                    
+                    const priceVal = rec.price ? rec.price.toLocaleString('en-IN', {maximumFractionDigits: 2}) : 'N/A';
+                    const priceChg = rec.price_change ? rec.price_change.toFixed(2) : '0.00';
+                    const oiChg = rec.oi_change ? rec.oi_change.toFixed(2) : '0.00';
+                    const priceClass = rec.price_change >= 0 ? 'green-text' : 'red-text';
+                    const oiClass = rec.oi_change >= 0 ? 'green-text' : 'red-text';
+                    
+                    recContainer.innerHTML += `
+                        <div class="rec-item">
+                            <span class="rec-tag ${tagClass}">${tagText}</span>
+                            <div class="rec-symbol">${rec.symbol}</div>
+                            <div class="rec-details">
+                                <div class="rec-ltp">₹ ${priceVal}</div>
+                                <div class="rec-changes">
+                                    <div class="${priceClass}">${priceChg >= 0 ? '+' : ''}${priceChg}% Price</div>
+                                    <div class="${oiClass}">${oiChg >= 0 ? '+' : ''}${oiChg}% OI</div>
+                                </div>
+                            </div>
+                        </div>
+                    `;
+                });
+            } else {
+                recContainer.innerHTML = '<div style="color: var(--text-secondary); width: 100%; text-align: center; padding: 1rem;">No trade opportunities found today.</div>';
+            }
+
+            // Render Sector List
+            const sectorList = document.getElementById('sector-list');
+            sectorList.innerHTML = '';
+            
+            data.sectors.forEach((sec, idx) => {
+                const color = sec.change >= 0 ? 'var(--primary-green)' : 'var(--primary-red)';
+                const changeClass = sec.change >= 0 ? 'green-text' : 'red-text';
+                const progressWidth = Math.min(Math.max((sec.change + 3) * 15, 5), 100); // normalized display
+                
+                sectorList.innerHTML += `
+                    <div class="sector-item">
+                        <div class="sector-info">
+                            <span class="sector-name">${idx + 1}. ${sec.index}</span>
+                            <span class="sector-change ${changeClass}">${sec.change >= 0 ? '+' : ''}${sec.change.toFixed(2)}%</span>
+                        </div>
+                        <div class="sector-gauge-bg">
+                            <div class="sector-gauge-fill" style="width: ${progressWidth}%; background-color: ${color};"></div>
+                        </div>
+                        <div class="sector-meta">
+                            <span>Breadth: ${sec.breadth.toFixed(1)}%</span>
+                            <span>A/D: ${sec.advances} - ${sec.declines}</span>
+                        </div>
+                    </div>
+                `;
+            });
+
+            // Update Stock Table header
+            document.getElementById('stocks-title').innerText = `📈 Stock Analysis: ${data.top_sector}`;
+            const breadthBadge = document.getElementById('sector-breadth-badge');
+            breadthBadge.innerText = `Breadth: ${data.sector_breadth.toFixed(1)}%`;
+            if (data.sector_breadth >= 70.0) {
+                breadthBadge.className = "buildup-badge long-buildup";
+                breadthBadge.innerText += " (Strong)";
+            } else {
+                breadthBadge.className = "buildup-badge long-unwinding";
+                breadthBadge.innerText += " (Weak)";
+            }
+
+            // Render Stock Table
+            const tbody = document.getElementById('stocks-table-body');
+            tbody.innerHTML = '';
+            
+            data.stocks.forEach(stock => {
+                const price = stock.price ? stock.price.toLocaleString('en-IN', {maximumFractionDigits: 2}) : 'N/A';
+                const pChg = stock.price_change ? stock.price_change.toFixed(2) : '0.00';
+                const oiChg = stock.oi_change ? stock.oi_change.toFixed(2) : '0.00';
+                
+                const pClass = stock.price_change >= 0 ? 'green-text' : 'red-text';
+                const oiClass = stock.oi_change >= 0 ? 'green-text' : 'red-text';
+                
+                let bClass = 'neutral';
+                if (stock.buildup === "Long Buildup") bClass = 'long-buildup';
+                else if (stock.buildup === "Short Buildup") bClass = 'short-buildup';
+                else if (stock.buildup === "Short Covering") bClass = 'short-covering';
+                else if (stock.buildup === "Long Unwinding") bClass = 'long-unwinding';
+                
+                tbody.innerHTML += `
+                    <tr>
+                        <td><strong>${stock.symbol}</strong></td>
+                        <td style="text-align: right;">₹ ${price}</td>
+                        <td style="text-align: right;" class="${pClass}">${pChg >= 0 ? '+' : ''}${pChg}%</td>
+                        <td style="text-align: right;" class="${oiClass}">${oiChg >= 0 ? '+' : ''}${oiChg}%</td>
+                        <td style="text-align: right; color: var(--text-secondary);" class="dim">${stock.volume.toLocaleString('en-IN')}</td>
+                        <td style="text-align: center;">
+                            <span class="buildup-badge ${bClass}">${stock.buildup}</span>
+                        </td>
+                    </tr>
+                `;
+            });
+
+            // Display grid
+            document.getElementById('dashboard').classList.add('loaded');
+        }
+
+        function showError(msg) {
+            document.getElementById('loader-status').innerHTML = `<span class="red-text">Error: ${msg}</span>`;
+            document.getElementById('status-toast').innerText = "Scan failed";
+        }
+
+        // Initialize dashboard on load
+        window.addEventListener('DOMContentLoaded', loadDashboardData);
+    </script>
+</body>
+</html>
