@@ -886,26 +886,48 @@
                     const idxNet = row.index_net;
                     const idxNetChg = row.index_net_change;
                     const idxChgClass = idxNetChg > 0 ? 'green-text' : idxNetChg < 0 ? 'red-text' : '';
-                    const idxNetHtml = `<strong>${idxNet.toLocaleString('en-IN')}</strong><br><small class="${idxChgClass}">${idxNetChg >= 0 ? '+' : ''}${idxNetChg.toLocaleString('en-IN')}</small>`;
+                    
+                    const idxAct = row.index_action || 'Neutral';
+                    let idxActClass = 'neutral';
+                    if (["Initial Buying", "Accumulating", "Aggressive Buying", "Short Covering"].includes(idxAct)) {
+                        idxActClass = idxAct === "Aggressive Buying" ? 'long-buildup' : idxAct === "Short Covering" ? 'short-covering' : 'long-buildup';
+                    } else if (["Shorting", "Aggressive Shorting", "Long Unwinding", "Profit Booking"].includes(idxAct)) {
+                        idxActClass = idxAct === "Aggressive Shorting" ? 'short-buildup' : idxAct === "Profit Booking" ? 'long-unwinding' : 'short-buildup';
+                    }
+                    
+                    const idxNetHtml = `<strong>${idxNet.toLocaleString('en-IN')}</strong><br>
+                                        <small class="${idxChgClass}">${idxNetChg >= 0 ? '+' : ''}${idxNetChg.toLocaleString('en-IN')}</small><br>
+                                        <span class="buildup-badge ${idxActClass}" style="font-size: 0.65rem; padding: 0.1rem 0.35rem; margin-top: 0.25rem; display: inline-block;">${idxAct}</span>`;
                     
                     // Stock Net Rendering
                     const stkNet = row.stock_net;
                     const stkNetChg = row.stock_net_change;
                     const stkChgClass = stkNetChg > 0 ? 'green-text' : stkNetChg < 0 ? 'red-text' : '';
-                    const stkNetHtml = `<strong>${stkNet.toLocaleString('en-IN')}</strong><br><small class="${stkChgClass}">${stkNetChg >= 0 ? '+' : ''}${stkNetChg.toLocaleString('en-IN')}</small>`;
+                    
+                    const stkAct = row.stock_action || 'Neutral';
+                    let stkActClass = 'neutral';
+                    if (["Initial Buying", "Accumulating", "Aggressive Buying", "Short Covering"].includes(stkAct)) {
+                        stkActClass = stkAct === "Aggressive Buying" ? 'long-buildup' : stkAct === "Short Covering" ? 'short-covering' : 'long-buildup';
+                    } else if (["Shorting", "Aggressive Shorting", "Long Unwinding", "Profit Booking"].includes(stkAct)) {
+                        stkActClass = stkAct === "Aggressive Shorting" ? 'short-buildup' : stkAct === "Profit Booking" ? 'long-unwinding' : 'short-buildup';
+                    }
+                    
+                    const stkNetHtml = `<strong>${stkNet.toLocaleString('en-IN')}</strong><br>
+                                        <small class="${stkChgClass}">${stkNetChg >= 0 ? '+' : ''}${stkNetChg.toLocaleString('en-IN')}</small><br>
+                                        <span class="buildup-badge ${stkActClass}" style="font-size: 0.65rem; padding: 0.1rem 0.35rem; margin-top: 0.25rem; display: inline-block;">${stkAct}</span>`;
                     
                     fiiTbody.innerHTML += `
                         <tr>
                             <td><strong>${row.date_formatted}</strong></td>
-                            <td style="text-align: right; line-height: 1.2;">${niftyHtml}</td>
-                            <td style="text-align: right;">${row.index_long.toLocaleString('en-IN')}</td>
-                            <td style="text-align: right;">${row.index_short.toLocaleString('en-IN')}</td>
-                            <td style="text-align: right; line-height: 1.2;">${idxNetHtml}</td>
-                            <td style="text-align: center;"><span class="${idxClass}">${idxRatio}%</span></td>
-                            <td style="text-align: right;">${row.stock_long.toLocaleString('en-IN')}</td>
-                            <td style="text-align: right;">${row.stock_short.toLocaleString('en-IN')}</td>
-                            <td style="text-align: right; line-height: 1.2;">${stkNetHtml}</td>
-                            <td style="text-align: center;"><span class="${stkClass}">${stkRatio}%</span></td>
+                            <td style="text-align: right; line-height: 1.2; vertical-align: middle;">${niftyHtml}</td>
+                            <td style="text-align: right; vertical-align: middle;">${row.index_long.toLocaleString('en-IN')}</td>
+                            <td style="text-align: right; vertical-align: middle;">${row.index_short.toLocaleString('en-IN')}</td>
+                            <td style="text-align: right; line-height: 1.2; vertical-align: middle;">${idxNetHtml}</td>
+                            <td style="text-align: center; vertical-align: middle;"><span class="${idxClass}">${idxRatio}%</span></td>
+                            <td style="text-align: right; vertical-align: middle;">${row.stock_long.toLocaleString('en-IN')}</td>
+                            <td style="text-align: right; vertical-align: middle;">${row.stock_short.toLocaleString('en-IN')}</td>
+                            <td style="text-align: right; line-height: 1.2; vertical-align: middle;">${stkNetHtml}</td>
+                            <td style="text-align: center; vertical-align: middle;"><span class="${stkClass}">${stkRatio}%</span></td>
                         </tr>
                     `;
                 });

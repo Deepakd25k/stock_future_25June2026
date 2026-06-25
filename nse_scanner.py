@@ -260,10 +260,18 @@ def fetch_fii_trend_data():
         if idx == 0:
             day['index_net_change'] = 0
             day['stock_net_change'] = 0
+            day['index_long_chg'] = 0
+            day['index_short_chg'] = 0
+            day['stock_long_chg'] = 0
+            day['stock_short_chg'] = 0
         else:
             prev_day = successful_days[idx - 1]
             day['index_net_change'] = day['index_net'] - prev_day['index_net']
             day['stock_net_change'] = day['stock_net'] - prev_day['stock_net']
+            day['index_long_chg'] = day['index_long'] - prev_day['index_long']
+            day['index_short_chg'] = day['index_short'] - prev_day['index_short']
+            day['stock_long_chg'] = day['stock_long'] - prev_day['stock_long']
+            day['stock_short_chg'] = day['stock_short'] - prev_day['stock_short']
             
         # Map Nifty close & change
         d_key = day['date_key']
@@ -273,6 +281,66 @@ def fetch_fii_trend_data():
         else:
             day['nifty_close'] = None
             day['nifty_change'] = None
+
+    # Sequential Action Classification
+    for idx in range(len(successful_days)):
+        day = successful_days[idx]
+        if idx == 0:
+            day['index_action'] = "Neutral"
+            day['stock_action'] = "Neutral"
+            continue
+            
+        prev_day = successful_days[idx - 1]
+        
+        # Index Action
+        idx_net_chg = day['index_net_change']
+        idx_long_chg = day['index_long_chg']
+        idx_short_chg = day['index_short_chg']
+        
+        if idx_net_chg > 0:
+            if idx == 1 or prev_day.get('index_net_change', 0) <= 0:
+                day['index_action'] = "Initial Buying"
+            else:
+                day['index_action'] = "Accumulating"
+                
+            if idx_long_chg > abs(idx_short_chg) * 1.5 and idx_long_chg > 4000:
+                day['index_action'] = "Aggressive Buying"
+            elif idx_short_chg < -4000 and idx_long_chg >= 0:
+                day['index_action'] = "Short Covering"
+        else:
+            if idx_short_chg > abs(idx_long_chg) * 1.5 and idx_short_chg > 4000:
+                day['index_action'] = "Aggressive Shorting"
+            elif idx_short_chg > 0 and idx_long_chg <= 0:
+                day['index_action'] = "Shorting"
+            elif idx_long_chg < -4000 and idx_short_chg <= 0:
+                day['index_action'] = "Long Unwinding"
+            else:
+                day['index_action'] = "Profit Booking"
+                
+        # Stock Action
+        stk_net_chg = day['stock_net_change']
+        stk_long_chg = day['stock_long_chg']
+        stk_short_chg = day['stock_short_chg']
+        
+        if stk_net_chg > 0:
+            if idx == 1 or prev_day.get('stock_net_change', 0) <= 0:
+                day['stock_action'] = "Initial Buying"
+            else:
+                day['stock_action'] = "Accumulating"
+                
+            if stk_long_chg > abs(stk_short_chg) * 1.5 and stk_long_chg > 15000:
+                day['stock_action'] = "Aggressive Buying"
+            elif stk_short_chg < -15000 and stk_long_chg >= 0:
+                day['stock_action'] = "Short Covering"
+        else:
+            if stk_short_chg > abs(stk_long_chg) * 1.5 and stk_short_chg > 15000:
+                day['stock_action'] = "Aggressive Shorting"
+            elif stk_short_chg > 0 and stk_long_chg <= 0:
+                day['stock_action'] = "Shorting"
+            elif stk_long_chg < -15000 and stk_short_chg <= 0:
+                day['stock_action'] = "Long Unwinding"
+            else:
+                day['stock_action'] = "Profit Booking"
             
     return successful_days
 
@@ -492,12 +560,12 @@ def print_cli_results(result):
         # Net change formatting
         idx_net_val = row['index_net']
         idx_net_chg = row['index_net_change']
-        idx_net_str = f"{idx_net_val:+,} ({idx_net_chg:+,})"
+        idx_net_str = f"{idx_net_val:+,} ({idx_net_chg:+,})\n[{row.get('index_action', 'Neutral')}]"
         idx_net_color = "green" if idx_net_chg > 0 else "red" if idx_net_chg < 0 else "white"
         
         stk_net_val = row['stock_net']
         stk_net_chg = row['stock_net_change']
-        stk_net_str = f"{stk_net_val:+,} ({stk_net_chg:+,})"
+        stk_net_str = f"{stk_net_val:+,} ({stk_net_chg:+,})\n[{row.get('stock_action', 'Neutral')}]"
         stk_net_color = "green" if stk_net_chg > 0 else "red" if stk_net_chg < 0 else "white"
         
         table_fii.add_row(
